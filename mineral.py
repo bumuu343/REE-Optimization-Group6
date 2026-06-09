@@ -28,18 +28,18 @@ with st.sidebar.container(border=True):
 # ==========================================
 with st.sidebar.container(border=True):
     st.markdown("#### 🌍 Geological Profile")
-    ree_content = st.number_input("REE Content / Grade (g/ton)", min_value=0, max_value=1000, value=350, step=10)
+    # KEMAS KINI: Menukar input supaya pengguna boleh masukkan gred REE mengikut tapak sebenar
+    ree_content = st.number_input("Input Site REE Grade (g/ton):", min_value=0, max_value=2000, value=350, step=10, help="Enter the actual REE grade obtained from your site's lab analysis.")
     
     if ree_content > 400:
-        status_label, status_desc, status_color, text_color = "ECONOMIC MINING", "Highly economical for full-scale operations.", "rgba(46, 204, 113, 0.2)", "#2ECC71"
+        status_label, status_desc, status_color, text_color = "ECONOMIC MINING", "High-grade ore. Ideal for full-scale operations.", "rgba(46, 204, 113, 0.2)", "#2ECC71"
     elif 300 <= ree_content <= 400:
-        status_label, status_desc, status_color, text_color = "POTENTIAL MINING", "High potential. Requires OPEX control.", "rgba(241, 196, 15, 0.2)", "#F1C40F"
+        status_label, status_desc, status_color, text_color = "POTENTIAL MINING", "Feasible. Monitor OPEX closely.", "rgba(241, 196, 15, 0.2)", "#F1C40F"
     elif 100 <= ree_content < 300:
-        status_label, status_desc, status_color, text_color = "POSSIBLE MINING", "Slim margins. Conditional feasibility.", "rgba(52, 152, 219, 0.2)", "#3498DB"
+        status_label, status_desc, status_color, text_color = "POSSIBLE MINING", "Marginal. Requires optimized recovery.", "rgba(52, 152, 219, 0.2)", "#3498DB"
     else:
-        status_label, status_desc, status_color, text_color = "NOT FEASIBLE", "REE grade too low for extraction.", "rgba(231, 76, 60, 0.2)", "#E74C3C"
+        status_label, status_desc, status_color, text_color = "NOT FEASIBLE", "Grade too low. Uneconomical for ISL.", "rgba(231, 76, 60, 0.2)", "#E74C3C"
 
-    # UI Alert Box for Feasibility
     st.markdown(
         f"""
         <div style="background-color:{status_color}; padding:10px; border-radius:5px; border:1px solid {text_color}; text-align:center;">
@@ -48,21 +48,37 @@ with st.sidebar.container(border=True):
         </div>
         """, unsafe_allow_html=True
     )
-
 # 📚 LITERATURE REFERENCES (SHORT VERSION FOR SIDEBAR)
 st.sidebar.markdown("---")
 st.sidebar.header("📚 3. Core Engine Benchmarks")
 st.sidebar.info(
     "**System background engine validated against:**\n\n"
-    "1. **Miiro, E. (2023):** *Hydrometallurgical Processing of REE from Clays (UCT Thesis).*\n"
-    "2. **He et al. (2016):** *Process optimization of REE leaching.*\n"
-    "3. **Moldoveanu & Papangelakis (2013):** Confirms Ammonium Sulphate superiority."
+    "1. **Fendy & Ismail:** *GM48 Sample Baseline (244 ppm).* \n"
+    "2. **Miiro, E. (2023):** *Hydrometallurgical Processing of REE from Clays.*\n"
+    "3. **He et al. (2016):** *Process optimization of REE leaching.*\n"
+    "4. **Moldoveanu & Papangelakis (2013):** Confirms Ammonium Sulphate superiority."
+)
+
+# 👨‍💻 TEAM CREDITS
+st.sidebar.markdown("---")
+st.sidebar.markdown("#### 🎓 Project Developers")
+st.sidebar.info(
+    "**Universiti Malaysia Kelantan (UMK)**\n"
+    "**Group 6 (Mineral Technology):**\n"
+    "• Muhammad Amir Bin Nasrudin\n"
+    "• Nur Irdina Syakila Binti Mohamed Noor\n"
+    "• Ayu Aneesha Binti Abd Halim\n"
+    "• Thiviyadharshini A/P Mani Rajah\n\n"
+    "**Supervisor:**\n"
+    "Assoc. Prof. Ts. ChM. Dr Abdul Hafidz Bin Yusoff"
 )
 
 # ==========================================
-# 2. BACKGROUND DATA ENGINE & MLR WEIGHTS
+# 3. BACKGROUND DATA ENGINE & MLR WEIGHTS
 # ==========================================
 data_points = []
+# KEMAS KINI: Menambah data Fendy & Ismail GM48 ke dalam pangkalan data
+data_points.append({'Time': 1, 'Molarity': 0.5, 'Recovery': 46.5, 'Source': 'Fendy & Ismail (GM48 0.5M)'})
 data_points.append({'Time': 24, 'Molarity': 1.5, 'Recovery': 15.0, 'Source': 'Miiro 2023 (1.5M Column)'})
 data_points.append({'Time': 72, 'Molarity': 1.5, 'Recovery': 31.0, 'Source': 'Miiro 2023 (1.5M Column)'})
 data_points.append({'Time': 144, 'Molarity': 1.5, 'Recovery': 50.0, 'Source': 'Miiro 2023 (1.5M Column)'})
@@ -81,7 +97,7 @@ def calc_y_mx_c(molarity, time):
     return max(y, 0.0) 
 
 # ==========================================
-# 3. ADVANCED EXCEL EXPORT GENERATOR
+# 4. ADVANCED EXCEL EXPORT GENERATOR
 # ==========================================
 def generate_excel():
     output = io.BytesIO()
@@ -103,7 +119,7 @@ def generate_excel():
         
         for col_num, value in enumerate(journal_data.columns.values):
             ws_val.write(0, col_num, value, header_format)
-        ws_val.set_column('A:D', 18)
+        ws_val.set_column('A:D', 22)
         
         for col_num, value in enumerate(df_tradeoff.columns.values):
             ws_opt.write(0, col_num, value, header_format)
@@ -127,7 +143,7 @@ st.sidebar.markdown("---")
 st.sidebar.download_button("📄 Download Professional Excel Report", data=generate_excel(), file_name="REE_ISL_Optimization_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ==========================================
-# 4. MAIN PANEL DISPLAY & FINANCIAL PROJECTION
+# 5. MAIN PANEL DISPLAY & FINANCIAL PROJECTION
 # ==========================================
 
 # --- 1. PREMIUM HEADER BANNER ---
@@ -164,7 +180,7 @@ with st.container(border=True):
     with input_col2:
         user_time = st.number_input("Pumping Time (Hours):", min_value=0.0, max_value=500.0, value=72.0, step=12.0, format="%.1f")
     with input_col3:
-        est_opex = 500 + (user_molarity * 1500) + (user_time * 15)
+        est_opex = 500 + (user_molarity * 1000) + (user_time * 12)
         st.info(f"💰 **Est. OPEX (Pilot Well):** RM {est_opex:,.2f}")
 
     live_predicted_yield = calc_y_mx_c(user_molarity, user_time)
@@ -184,9 +200,9 @@ st.markdown("<br>", unsafe_allow_html=True)
 # --- 3. FINANCIAL PROJECTION CARD ---
 with st.container(border=True):
     st.markdown("### 💼 Economic Feasibility Analysis (100-Ton Pilot Well)")
-    st.caption("This module projects the estimated Return on Investment (ROI) based on your selected operational parameters and a baseline assumed market price for Mixed Rare Earth Carbonate (MREC) at **RM 150/kg**.")
+    st.caption("This module projects the estimated Return on Investment (ROI) based on your selected operational parameters and a baseline assumed market price for Mixed Rare Earth Carbonate (MREC) at **RM 200/kg**.")
 
-    market_price_per_kg = 150.0  
+    market_price_per_kg = 200.0  
     total_ree_kg_in_block = (100 * ree_content) / 1000  
     extracted_ree_kg = total_ree_kg_in_block * (clamped_display_yield / 100)
     revenue_per_block = extracted_ree_kg * market_price_per_kg
@@ -216,8 +232,10 @@ with st.container(border=True):
         fin_col3.metric("Projected Yearly ROI", f"-RM {abs(yearly_profit):,.2f}", "Continuous 24/7 Operation", delta_color="inverse")
 
 st.markdown("<br>", unsafe_allow_html=True)
+
+
 # ==========================================
-# 5. GRAPHS (CLEAN PREDICTIVE LINES)
+# 6. GRAPHS (CLEAN PREDICTIVE LINES)
 # ==========================================
 st.subheader("📈 Step 3: Visualizing the Data")
 tab1, tab2, tab3, tab4 = st.tabs(["⏱️ 1. Time Impact", "🧪 2. Chemical Impact", "⚖️ 3. Find the Sweet Spot", "🤖 4. How the Math Works"])
@@ -264,6 +282,7 @@ with tab4:
     We tabulated raw experimental results focusing exclusively on Ammonium Sulphate extraction dynamics:
     * **Concentration impact** sourced from *He et al. (2016)*.
     * **Diffusion time impact** in un-agitated conditions sourced from *Miiro (2023)*.
+    * **Local validation benchmark** sourced from *Fendy & Ismail* for GM48 samples.
     
     #### **Step 2: Multiple Linear Regression (MLR) Analysis**
     The raw data points were subjected to a statistical regression analysis to find the "Line of Best Fit" across a 3-dimensional plane (Yield vs. Concentration vs. Time). 
@@ -283,30 +302,18 @@ with tab4:
     st.info("💡 **Engineering Value:** By using a pre-validated equation derived from established literature, the system acts as a highly accurate mathematical bridge between academic research and industrial application.")
 
 # ==========================================
-# 6. FULL ACADEMIC REFERENCES (APA 7TH EDITION)
+# 7. FULL ACADEMIC REFERENCES (APA 7TH EDITION)
 # ==========================================
 st.markdown("---")
 with st.expander("📚 Full Academic References & Project Bibliography (APA 7th Edition)"):
     st.markdown("""
-    1. **Hamka, A. A. M., Saleki, M., Nabavi, Z., & Dehghani, H. (2024).** Impacts of ammonium sulfate leaching on ion adsorption, rare earths, and soil mechanical properties. *Rudarsko-geološko-naftni zbornik*, 39(1), 27-40. https://doi.org/10.17794/rgn.2024.1.3
-    2. **He, H., Shan, H., Mo, D., Liu, Y., Peng, S., Cheng, Y., Chen, M., & Yan, Z. (2023).** Simulation study on the environmental impact of rare earth ore development on groundwater in hilly areas: A case study in Nuodong, China. *Water*, 15(2), 263. https://doi.org/10.3390/w15020263
-    3. **He, Z., Zhang, Z., Yu, J., Xu, Z., & Chi, R. (2016).** Process optimization of rare earth elements leaching from ion-adsorption ores with ammonium sulfate. *Hydrometallurgy*, 164, 1-7.
-    4. **Miiro, E. (2023).** *Hydrometallurgical processing of rare earth elements from clays* (Master's thesis). University of Cape Town.
-    5. **Moldoveanu, G. A., & Papangelakis, V. G. (2013).** Recovery of rare earth elements adsorbed on clay minerals: II. Leaching with ammonium sulphate. *Hydrometallurgy*, 131, 158-166.
-    6. **Muhammad, N. N. N., Muna, N. A., Yunus, M. Y. M., Kassim, K., Jamion, N. A., Hanafiah, M. A. K. M., Ghazali, N. F., & Kong, Y. S. (2025).** Advances in the development of leaching agents for assisting phytoremediation of rare earth elements: A review. *Malaysian Journal of Chemistry*, 27(5), 27-50.
-    7. **Sobri, N. A. M., & Harun, N. (2025).** Mathematical modelling of rare earth elements recovery by ion exchange leaching from ion adsorption clays. *Journal of Chemical Engineering and Industrial Biotechnology*, 11(1), 41-58. https://doi.org/10.15282/jceib.v11i1.12401
-    8. **Wu, X., Feng, J., Zhou, F., Liu, C., & Chi, R. (2024).** Optimisation of a rare earth and aluminum leaching process from weathered crust elution-deposited rare earth ore with surfactant CTAB. *Minerals*, 14(3), 321. https://doi.org/10.3390/min14030321
+    1. **Fendy, N. A., & Ismail, R. (n.d.).** Leaching of non-radioactive rare earth elements (NR-REE) from ion adsorption clay (IAC) using monovalent salt solution. *Department of Geoscience, Universiti Malaysia Kelantan*.
+    2. **Hamka, A. A. M., Saleki, M., Nabavi, Z., & Dehghani, H. (2024).** Impacts of ammonium sulfate leaching on ion adsorption, rare earths, and soil mechanical properties. *Rudarsko-geološko-naftni zbornik*, 39(1), 27-40. https://doi.org/10.17794/rgn.2024.1.3
+    3. **He, H., Shan, H., Mo, D., Liu, Y., Peng, S., Cheng, Y., Chen, M., & Yan, Z. (2023).** Simulation study on the environmental impact of rare earth ore development on groundwater in hilly areas: A case study in Nuodong, China. *Water*, 15(2), 263. https://doi.org/10.3390/w15020263
+    4. **He, Z., Zhang, Z., Yu, J., Xu, Z., & Chi, R. (2016).** Process optimization of rare earth elements leaching from ion-adsorption ores with ammonium sulfate. *Hydrometallurgy*, 164, 1-7.
+    5. **Miiro, E. (2023).** *Hydrometallurgical processing of rare earth elements from clays* (Master's thesis). University of Cape Town.
+    6. **Moldoveanu, G. A., & Papangelakis, V. G. (2013).** Recovery of rare earth elements adsorbed on clay minerals: II. Leaching with ammonium sulphate. *Hydrometallurgy*, 131, 158-166.
+    7. **Muhammad, N. N. N., Muna, N. A., Yunus, M. Y. M., Kassim, K., Jamion, N. A., Hanafiah, M. A. K. M., Ghazali, N. F., & Kong, Y. S. (2025).** Advances in the development of leaching agents for assisting phytoremediation of rare earth elements: A review. *Malaysian Journal of Chemistry*, 27(5), 27-50.
+    8. **Sobri, N. A. M., & Harun, N. (2025).** Mathematical modelling of rare earth elements recovery by ion exchange leaching from ion adsorption clays. *Journal of Chemical Engineering and Industrial Biotechnology*, 11(1), 41-58. https://doi.org/10.15282/jceib.v11i1.12401
+    9. **Wu, X., Feng, J., Zhou, F., Liu, C., & Chi, R. (2024).** Optimisation of a rare earth and aluminum leaching process from weathered crust elution-deposited rare earth ore with surfactant CTAB. *Minerals*, 14(3), 321. https://doi.org/10.3390/min14030321
     """)
-# 👨‍💻 TEAM CREDITS
-st.sidebar.markdown("---")
-st.sidebar.markdown("#### 🎓 Project Developers")
-st.sidebar.info(
-    "**Universiti Malaysia Kelantan (UMK)**\n"
-    "**Group 6 (Mineral Technology):**\n"
-    "• Muhammad Amir Bin Nasrudin\n"
-    "• Nur Irdina Syakila Binti Mohamed Noor\n"
-    "• Ayu Aneesha Binti Abd Halim\n"
-    "• Thiviyadharshini A/P Mani Rajah\n\n"
-    "**Supervisor:**\n"
-    "Assoc. Prof. Ts. ChM. Dr Abdul Hafidz Bin Yusoff"
-)
