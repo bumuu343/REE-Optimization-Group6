@@ -3,33 +3,126 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import io
+import time
+from fpdf import FPDF
+import base64
+from datetime import datetime
 
 # ==========================================
-# 1. CONFIGURATION & SIDEBAR SETUP
+# 1. CONFIGURATION & INTERACTIVE CSS INJECTION
 # ==========================================
-st.set_page_config(layout="wide", page_title="ISL REE Optimization Model - Group 6", page_icon="⚙️")
+st.set_page_config(layout="wide", page_title="ISL REE Optimization Model - Group 6", page_icon="💎")
 
+st.markdown("""
+<style>
+    .stMetric {
+        background-color: white;
+        padding: 1.2rem;
+        border-radius: 1.2rem;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        cursor: pointer;
+    }
+    .stMetric:hover {
+        border-color: #3B82F6;
+        box-shadow: 0 12px 20px rgba(59, 130, 246, 0.15);
+        transform: translateY(-4px);
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #1E3A8A;
+    }
+    div[data-testid="stMetricDelta"] {
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+    .autopilot-box {
+        background: linear-gradient(135deg, #F0F9FF 0%, #DBEAFE 100%);
+        border-left: 6px solid #2563EB;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
+    .autopilot-text {
+        color: #1E3A8A;
+        font-size: 15px;
+        font-weight: 500;
+        margin: 0;
+    }
+    
+    /* SCADA INDUSTRIAL CRITICAL ALARM */
+    @keyframes scada-flash {
+        0% { background-color: #7f1d1d; box-shadow: 0 0 10px rgba(220, 38, 38, 0.5); }
+        50% { background-color: #dc2626; box-shadow: 0 0 25px rgba(220, 38, 38, 0.9); }
+        100% { background-color: #7f1d1d; box-shadow: 0 0 10px rgba(220, 38, 38, 0.5); }
+    }
+    .scada-alarm-container {
+        border-left: 12px solid #000000;
+        border-right: 2px solid #ef4444;
+        border-top: 2px solid #ef4444;
+        border-bottom: 2px solid #ef4444;
+        padding: 18px 20px;
+        border-radius: 4px;
+        color: #ffffff;
+        font-family: 'Courier New', Courier, monospace;
+        animation: scada-flash 1.2s infinite;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+    .scada-header {
+        font-size: 18px;
+        font-weight: 900;
+        letter-spacing: 1.5px;
+        margin-bottom: 8px;
+        color: #ffffff;
+        text-transform: uppercase;
+    }
+    .scada-body {
+        font-size: 15px;
+        font-weight: bold;
+        color: #fca5a5;
+        line-height: 1.4;
+    }
+    .scada-code {
+        background-color: #000000;
+        color: #ef4444;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 13px;
+        margin-right: 8px;
+    }
+    footer {visibility: hidden;}
+</style>
+""", unsafe_allow_html=True)
+
+# Session State untuk kawal sistem Toast 
+if 'prev_molarity' not in st.session_state:
+    st.session_state.prev_molarity = 1.60
+if 'prev_time' not in st.session_state:
+    st.session_state.prev_time = 144.0
+
+# ==========================================
+# 2. SIDEBAR & GEOLOGICAL PROFILE
+# ==========================================
 st.sidebar.markdown("## 🎛️ DSS CONTROL PANEL")
 st.sidebar.caption("Adjust baseline parameters to run live simulations.")
 
-# --- CARD 1: OPERATIONAL LIMITS ---
 with st.sidebar.container(border=True):
     st.markdown("#### ⚙️ Operational Limits")
     max_time = st.slider("Max Pumping Time (Hours)", 24, 300, 120, 12, help="Hardware constraint for pump lifespan.")
-    max_molarity = st.slider("Max Concentration (M)", 0.2, 3.0, 1.5, 0.1, help="Safety limit for Ammonium Sulphate.")
+    max_molarity = st.slider("Max Concentration (M)", 0.2, 3.0, 2.0, 0.1, help="Safety limit for Ammonium Sulphate.")
 
-# --- CARD 2: ECONOMIC TARGETS ---
 with st.sidebar.container(border=True):
     st.markdown("#### 🎯 Economic Target")
     target_yield = st.slider("Target Recovery Yield (%)", 50, 100, 70, help="Minimum yield required for company profitability.")
 
-# ==========================================
-# 2. SITE FEASIBILITY INDICATOR
-# ==========================================
 with st.sidebar.container(border=True):
     st.markdown("#### 🌍 Geological Profile")
-    # KEMAS KINI: Menukar input supaya pengguna boleh masukkan gred REE mengikut tapak sebenar
-    ree_content = st.number_input("Input Site REE Grade (g/ton):", min_value=0, max_value=2000, value=350, step=10, help="Enter the actual REE grade obtained from your site's lab analysis.")
+    ree_content = st.number_input("Input Site REE Grade (g/ton):", min_value=0, max_value=2000, value=350, step=10)
     
     if ree_content > 400:
         status_label, status_desc, status_color, text_color = "ECONOMIC MINING", "High-grade ore. Ideal for full-scale operations.", "rgba(46, 204, 113, 0.2)", "#2ECC71"
@@ -40,31 +133,17 @@ with st.sidebar.container(border=True):
     else:
         status_label, status_desc, status_color, text_color = "NOT FEASIBLE", "Grade too low. Uneconomical for ISL.", "rgba(231, 76, 60, 0.2)", "#E74C3C"
 
-    st.markdown(
-        f"""
-        <div style="background-color:{status_color}; padding:10px; border-radius:5px; border:1px solid {text_color}; text-align:center;">
-            <h5 style="color:{text_color}; margin:0px; font-weight:bold;">{status_label}</h5>
-            <p style="font-size:11px; margin:2px 0px 0px 0px; color:white;">{status_desc}</p>
+    st.markdown(f"""
+        <div style="background-color:{status_color}; padding:12px; border-radius:8px; border:1.5px solid {text_color}; text-align:center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
+            <h5 style="color:{text_color}; margin:0px; font-weight:800; letter-spacing: 0.5px;">{status_label}</h5>
+            <p style="font-size:12px; margin:4px 0px 0px 0px; color:white;">{status_desc}</p>
         </div>
-        """, unsafe_allow_html=True
-    )
-# 📚 LITERATURE REFERENCES (SHORT VERSION FOR SIDEBAR)
-st.sidebar.markdown("---")
-st.sidebar.header("📚 3. Core Engine Benchmarks")
-st.sidebar.info(
-    "**System background engine validated against:**\n\n"
-    "1. **Fendy & Ismail:** *GM48 Sample Baseline (244 ppm).* \n"
-    "2. **Miiro, E. (2023):** *Hydrometallurgical Processing of REE from Clays.*\n"
-    "3. **He et al. (2016):** *Process optimization of REE leaching.*\n"
-    "4. **Moldoveanu & Papangelakis (2013):** Confirms Ammonium Sulphate superiority."
-)
+        """, unsafe_allow_html=True)
 
-# 👨‍💻 TEAM CREDITS
 st.sidebar.markdown("---")
 st.sidebar.markdown("#### 🎓 Project Developers")
 st.sidebar.info(
-    "**Universiti Malaysia Kelantan (UMK)**\n"
-    "**Group 6 (Mineral Technology):**\n"
+    "**Group 6 (Mineral Technology)**\n"
     "• Muhammad Amir Bin Nasrudin\n"
     "• Nur Irdina Syakila Binti Mohamed Noor\n"
     "• Ayu Aneesha Binti Abd Halim\n"
@@ -74,18 +153,18 @@ st.sidebar.info(
 )
 
 # ==========================================
-# 3. BACKGROUND DATA ENGINE & MLR WEIGHTS
+# 3. BACKGROUND DATA ENGINE
 # ==========================================
-data_points = []
-# KEMAS KINI: Menambah data Fendy & Ismail GM48 ke dalam pangkalan data
-data_points.append({'Time': 1, 'Molarity': 0.5, 'Recovery': 46.5, 'Source': 'Fendy & Ismail (GM48 0.5M)'})
-data_points.append({'Time': 24, 'Molarity': 1.5, 'Recovery': 15.0, 'Source': 'Miiro 2023 (1.5M Column)'})
-data_points.append({'Time': 72, 'Molarity': 1.5, 'Recovery': 31.0, 'Source': 'Miiro 2023 (1.5M Column)'})
-data_points.append({'Time': 144, 'Molarity': 1.5, 'Recovery': 50.0, 'Source': 'Miiro 2023 (1.5M Column)'})
-data_points.append({'Time': 216, 'Molarity': 1.5, 'Recovery': 60.0, 'Source': 'Miiro 2023 (1.5M Column)'})
-data_points.append({'Time': 288, 'Molarity': 1.5, 'Recovery': 69.0, 'Source': 'Miiro 2023 (1.5M Column)'})
-data_points.append({'Time': 24, 'Molarity': 0.2, 'Recovery': 30.0, 'Source': 'He et al. 2016 (0.2M)'})
-data_points.append({'Time': 72, 'Molarity': 0.2, 'Recovery': 42.0, 'Source': 'He et al. 2016 (0.2M)'})
+data_points = [
+    {'Time': 1, 'Molarity': 0.5, 'Recovery': 46.5, 'Source': 'Fendy & Ismail (GM48 0.5M)'},
+    {'Time': 24, 'Molarity': 1.5, 'Recovery': 15.0, 'Source': 'Miiro 2023'},
+    {'Time': 72, 'Molarity': 1.5, 'Recovery': 31.0, 'Source': 'Miiro 2023'},
+    {'Time': 144, 'Molarity': 1.5, 'Recovery': 50.0, 'Source': 'Miiro 2023'},
+    {'Time': 216, 'Molarity': 1.5, 'Recovery': 60.0, 'Source': 'Miiro 2023'},
+    {'Time': 288, 'Molarity': 1.5, 'Recovery': 69.0, 'Source': 'Miiro 2023'},
+    {'Time': 24, 'Molarity': 0.2, 'Recovery': 30.0, 'Source': 'He et al. 2016'},
+    {'Time': 72, 'Molarity': 0.2, 'Recovery': 42.0, 'Source': 'He et al. 2016'}
+]
 journal_data = pd.DataFrame(data_points)
 
 C_INTERCEPT = 12.0    
@@ -93,227 +172,264 @@ M_MOLARITY = 20.0
 M_TIME = 0.15          
 
 def calc_y_mx_c(molarity, time):
-    y = C_INTERCEPT + (M_MOLARITY * molarity) + (M_TIME * time)
-    return max(y, 0.0) 
+    return max(C_INTERCEPT + (M_MOLARITY * molarity) + (M_TIME * time), 0.0) 
 
 # ==========================================
-# 4. ADVANCED EXCEL EXPORT GENERATOR
+# 4. EXPORT GENERATORS (EXCEL & PDF)
 # ==========================================
-def generate_excel():
+@st.cache_data
+def generate_excel(m_max, y_target, t_max):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         journal_data.to_excel(writer, sheet_name='Background Validation', index=False)
-        m_range_excel = np.linspace(0.1, max_molarity, 50)
-        t_needed_excel = [max(0, min((target_yield - C_INTERCEPT - (M_MOLARITY * m)) / M_TIME, max_time)) for m in m_range_excel]
+        m_range_excel = np.linspace(0.1, m_max, 50)
+        t_needed_excel = [max(0, min((y_target - C_INTERCEPT - (M_MOLARITY * m)) / M_TIME, t_max)) for m in m_range_excel]
         df_tradeoff = pd.DataFrame({'Chemical Concentration (M)': m_range_excel, 'Required Time (Hours)': t_needed_excel})
         df_tradeoff.to_excel(writer, sheet_name='Optimization Boundary', index=False)
-        
-        workbook = writer.book
-        ws_val = writer.sheets['Background Validation']
-        ws_opt = writer.sheets['Optimization Boundary']
-        
-        header_format = workbook.add_format({
-            'bold': True, 'text_wrap': True, 'valign': 'top', 
-            'fg_color': '#2C3E50', 'font_color': 'white', 'border': 1
-        })
-        
-        for col_num, value in enumerate(journal_data.columns.values):
-            ws_val.write(0, col_num, value, header_format)
-        ws_val.set_column('A:D', 22)
-        
-        for col_num, value in enumerate(df_tradeoff.columns.values):
-            ws_opt.write(0, col_num, value, header_format)
-        ws_opt.set_column('A:B', 30)
-        
-        chart = workbook.add_chart({'type': 'line'})
-        chart.add_series({
-            'categories': ['Optimization Boundary', 1, 0, 50, 0], 
-            'values': ['Optimization Boundary', 1, 1, 50, 1],
-            'line': {'color': '#27AE60', 'width': 2.5}
-        })
-        chart.set_title({'name': 'Target Boundary: Time vs Concentration'})
-        chart.set_x_axis({'name': 'Chemical Concentration (M)'})
-        chart.set_y_axis({'name': 'Required Time (Hours)'})
-        chart.set_legend({'none': True}) 
-        ws_opt.insert_chart('D2', chart)
-        
     return output.getvalue()
 
+def generate_pdf_report(molarity, hours, yield_val, target_val, profit, opex, status):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(30, 58, 138)
+    pdf.cell(0, 10, "ISL DECISION SUPPORT SYSTEM - EXECUTIVE SUMMARY", ln=True, align="C")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 8, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True, align="C")
+    pdf.ln(10)
+    
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "1. OPERATIONAL PARAMETERS", ln=True)
+    pdf.set_font("Helvetica", "", 12)
+    pdf.cell(0, 6, f"- Ammonium Sulphate Concentration: {molarity:.2f} M", ln=True)
+    pdf.cell(0, 6, f"- Total Pumping Time: {hours:.1f} Hours", ln=True)
+    pdf.ln(5)
+    
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "2. SYSTEM YIELD & ESG COMPLIANCE", ln=True)
+    pdf.set_font("Helvetica", "", 12)
+    pdf.cell(0, 6, f"- Target Yield Required: {target_val:.1f}%", ln=True)
+    pdf.cell(0, 6, f"- Predicted Recovery Yield: {yield_val:.1f}%", ln=True)
+    
+    if molarity > 2.0:
+        pdf.set_text_color(220, 38, 38)
+        pdf.cell(0, 6, "- ESG STATUS: CRITICAL WARNING (High Contamination Risk)", ln=True)
+    else:
+        pdf.set_text_color(16, 185, 129)
+        pdf.cell(0, 6, "- ESG STATUS: NOMINAL (Safe Environmental Operation)", ln=True)
+        
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(5)
+    
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "3. ECONOMIC FEASIBILITY (100-TON PILOT WELL)", ln=True)
+    pdf.set_font("Helvetica", "", 12)
+    pdf.cell(0, 6, f"- Estimated OPEX: RM {opex:,.2f}", ln=True)
+    pdf.cell(0, 6, f"- Projected Net Profit: RM {profit:,.2f}", ln=True)
+    pdf.cell(0, 6, f"- Economic Status: {status}", ln=True)
+    
+    return pdf.output(dest='S').encode('latin1')
+
 st.sidebar.markdown("---")
-st.sidebar.download_button("📄 Download Professional Excel Report", data=generate_excel(), file_name="REE_ISL_Optimization_Report.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+# Dual Export Buttons
+export_col1, export_col2 = st.sidebar.columns(2)
+with export_col1:
+    st.download_button("📊 EXCEL DATA", data=generate_excel(max_molarity, target_yield, max_time), file_name="REE_ISL_Data.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
 # ==========================================
-# 5. MAIN PANEL DISPLAY & FINANCIAL PROJECTION
+# 5. MAIN PANEL DISPLAY & INTERACTIVE LOGIC
 # ==========================================
 
-# --- 1. PREMIUM HEADER BANNER ---
 st.markdown("""
-<div style="background: linear-gradient(to right, #1E3A8A, #3B82F6); padding: 25px; border-radius: 12px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-    <h2 style="color: white; margin: 0; font-weight: 800; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">In-Situ Leaching (ISL) Decision Support System</h2>
-    <p style="color: #DBEAFE; margin: 5px 0 0 0; font-size: 16px;">Optimization Model for Rare Earth Elements (REE) Using Ammonium Sulphate</p>
+<div style="background: linear-gradient(135deg, #1E3A8A, #3B82F6, #2563EB); padding: 30px; border-radius: 12px; text-align: center; margin-bottom: 25px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);">
+    <h1 style="color: #ffffff; margin: 0; font-weight: 900; letter-spacing: 1px; font-size: 2.2rem;">In-Situ Leaching (ISL) Decision Support System</h1>
+    <p style="color: #DBEAFE; margin: 8px 0 0 0; font-size: 1.1rem; font-weight: 500;">Optimization Model for Rare Earth Elements (REE) Using Ammonium Sulphate</p>
 </div>
 """, unsafe_allow_html=True)
 
-with st.expander("📖 Quick Start Guide: How to use this Dashboard", expanded=False):
-    st.markdown("""
-    **Welcome to the Group 6 ISL Decision Support System!**
-    This tool prevents expensive trial-and-error at the mining site. 
-    1. Adjust your physical limits in the **Control Panel** (left).
-    2. Use the **Live Predictor** to check your planned chemical parameters.
-    3. Explore the **Graphs** below to identify the 'Sweet Spot' for maximum profit.
-    """)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# --- 2. LIVE PREDICTOR CARD ---
+# --- LIVE PREDICTOR CARD ---
 with st.container(border=True):
-    st.markdown("### 🧮 Step 2: Live Yield & OPEX Predictor")
+    st.markdown("<h3 style='color: #1E293B;'>🧮 Step 2: Live Yield & OPEX Predictor</h3>", unsafe_allow_html=True)
     
     input_col1, input_col2, input_col3 = st.columns(3)
     with input_col1:
-        user_molarity = st.number_input("Ammonium Sulphate Concentration (M):", min_value=0.0, max_value=5.0, value=1.5, step=0.05, format="%.2f")
-        
-        # ESG Warning Trigger
-        if user_molarity > 2.0:
-            st.error("🚨 **ESG Warning:** High concentration exceeds optimal limits. Severe risk of ammonia-nitrogen groundwater contamination and soil degradation!")
-            
+        user_molarity = st.number_input("Ammonium Sulphate Concentration (M):", min_value=0.0, max_value=5.0, value=1.60, step=0.05, format="%.2f")
     with input_col2:
-        user_time = st.number_input("Pumping Time (Hours):", min_value=0.0, max_value=500.0, value=72.0, step=12.0, format="%.1f")
-    with input_col3:
-        est_opex = 500 + (user_molarity * 1000) + (user_time * 12)
-        st.info(f"💰 **Est. OPEX (Pilot Well):** RM {est_opex:,.2f}")
-
+        user_time = st.number_input("Pumping Time (Hours):", min_value=0.0, max_value=500.0, value=144.0, step=12.0, format="%.1f")
+    
     live_predicted_yield = calc_y_mx_c(user_molarity, user_time)
     clamped_display_yield = min(live_predicted_yield, 100.0) 
+    
+    # OPEX Breakdown
+    base_cost = 500.0
+    chemical_cost = user_molarity * 1000.0
+    electricity_cost = user_time * 12.0
+    est_opex = base_cost + chemical_cost + electricity_cost
+
+    with input_col3:
+        st.info(f"💰 **Est. OPEX (Pilot Well):**\n### RM {est_opex:,.2f}")
+
+    if st.session_state.prev_molarity != user_molarity or st.session_state.prev_time != user_time:
+        with st.spinner("Recalculating Kinetics & ROI..."):
+            time.sleep(0.3) 
+        if user_molarity > 2.0:
+            st.toast("🚨 ESG SYSTEM INTERLOCK TRIGGERED!", icon="☢️")
+        elif clamped_display_yield >= target_yield:
+            st.toast("✅ Optimization Complete: Target Achieved.", icon="🟢")
+        else:
+            st.toast("⚙️ Parameters Updated. Target NOT met.", icon="⚠️")
+        st.session_state.prev_molarity = user_molarity
+        st.session_state.prev_time = user_time
 
     st.markdown("---")
-    if clamped_display_yield >= target_yield:
-        st.success(f"🎯 **System Output: {clamped_display_yield:.2f}% REE Recovery!** (Target {target_yield}% achieved.)")
-    else:
-        st.warning(f"⚠️ **System Output: {clamped_display_yield:.2f}% REE Recovery.** (Target {target_yield}% NOT achieved.)")
-        suggested_m = (target_yield - C_INTERCEPT - (M_TIME * 144)) / M_MOLARITY
+    
+    yield_color = "#10B981" if clamped_display_yield >= target_yield else "#F59E0B"
+    status_text = "OPTIMAL (TARGET ACHIEVED)" if clamped_display_yield >= target_yield else "SUB-OPTIMAL (BELOW TARGET)"
+    
+    st.markdown(f"""
+    <div style="margin-top: 10px; margin-bottom: 25px; padding: 15px; border-radius: 8px; background-color: #F8FAFC; border: 1px solid #E2E8F0;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-weight: 600; color: #475569; font-size: 14px;">System Recovery Yield vs Target ({target_yield}%)</span>
+            <span style="font-weight: 800; color: {yield_color}; font-size: 15px;">{clamped_display_yield:.1f}% - {status_text}</span>
+        </div>
+        <div style="width: 100%; background-color: #E2E8F0; border-radius: 6px; height: 16px; overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);">
+            <div style="width: {clamped_display_yield}%; background-color: {yield_color}; height: 100%; transition: width 0.5s ease-in-out, background-color 0.5s ease-in-out;"></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if user_molarity > 2.0:
+        st.markdown(f"""
+        <div class="scada-alarm-container">
+            <div class="scada-header">☢️ CRITICAL ALARM: SYSTEM SAFETY INTERLOCK TRIGGERED</div>
+            <div class="scada-body">
+                <span class="scada-code">ERR-ESG-901</span> Chemical concentration ({user_molarity:.2f} M) exceeds structural safety limits.<br>
+                <span style="color:#ffffff;">RISK:</span> Severe ammonia-nitrogen groundwater leaching and soil degradation.<br>
+                <span style="color:#ffffff;">ACTION:</span> Operator must reduce Molarity below 2.0 M immediately!
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    if clamped_display_yield < target_yield:
+        suggested_m = (target_yield - C_INTERCEPT - (M_TIME * user_time)) / M_MOLARITY
         suggested_m = max(0.1, min(suggested_m, max_molarity))
-        st.info(f"💡 **Auto-Pilot Suggestion:** To hit your {target_yield}% target efficiently without exceeding limits, try setting concentration to **{suggested_m:.2f} M** and pumping for **144 Hours (6 Days)**.")
+        st.markdown(f"""
+        <div class="autopilot-box">
+            <p class="autopilot-text">💡 <strong>Smart Auto-Pilot Suggestion:</strong> To hit your {target_yield}% target efficiently, try setting concentration to <strong>{suggested_m:.2f} M</strong>.</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- 3. FINANCIAL PROJECTION CARD ---
+# --- FINANCIAL PROJECTION CARD ---
 with st.container(border=True):
-    st.markdown("### 💼 Economic Feasibility Analysis (100-Ton Pilot Well)")
-    st.caption("This module projects the estimated Return on Investment (ROI) based on your selected operational parameters and a baseline assumed market price for Mixed Rare Earth Carbonate (MREC) at **RM 200/kg**.")
+    st.markdown("<h3 style='color: #1E293B;'>💼 Economic Feasibility Analysis (100-Ton Pilot Well)</h3>", unsafe_allow_html=True)
 
-    market_price_per_kg = 200.0  
+    market_price_per_kg = st.slider("📈 Current MREC Market Price (RM/kg) - Risk Analysis", min_value=100.0, max_value=400.0, value=200.0, step=10.0)
+
     total_ree_kg_in_block = (100 * ree_content) / 1000  
     extracted_ree_kg = total_ree_kg_in_block * (clamped_display_yield / 100)
     revenue_per_block = extracted_ree_kg * market_price_per_kg
     profit_per_block = revenue_per_block - est_opex
+    profit_status = "FEASIBLE" if profit_per_block > 0 else "DEFICIT"
 
-    safe_time = max(user_time, 0.1) 
-    blocks_per_month = 720 / safe_time 
+    blocks_per_month = 720 / max(user_time, 0.1) 
     monthly_profit = profit_per_block * blocks_per_month
-    yearly_profit = monthly_profit * 12
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
     fin_col1, fin_col2, fin_col3 = st.columns(3)
 
     if profit_per_block > 0:
         fin_col1.metric("Net Profit (Pilot Well)", f"RM {profit_per_block:,.2f}", f"Gross Revenue: RM {revenue_per_block:,.0f}")
     else:
-        fin_col1.metric("Net Profit (Pilot Well)", f"-RM {abs(profit_per_block):,.2f}", f"Deficit: High OPEX/Low Yield", delta_color="inverse")
+        fin_col1.metric("Net Profit (Pilot Well)", f"-RM {abs(profit_per_block):,.2f}", f"Deficit: OPEX Exceeds Revenue", delta_color="inverse")
 
     if monthly_profit > 0:
         fin_col2.metric("Projected Monthly ROI", f"RM {monthly_profit:,.2f}", f"Capacity: {blocks_per_month:.1f} Wells/Month")
+        fin_col3.metric("Projected Yearly ROI", f"RM {(monthly_profit*12):,.2f}", "Continuous 24/7 Operation")
     else:
         fin_col2.metric("Projected Monthly ROI", f"-RM {abs(monthly_profit):,.2f}", f"Capacity: {blocks_per_month:.1f} Wells/Month", delta_color="inverse")
+        fin_col3.metric("Projected Yearly ROI", f"-RM {abs(monthly_profit*12):,.2f}", "Continuous 24/7 Operation", delta_color="inverse")
 
-    if yearly_profit > 0:
-        fin_col3.metric("Projected Yearly ROI", f"RM {yearly_profit:,.2f}", "Continuous 24/7 Operation")
-    else:
-        fin_col3.metric("Projected Yearly ROI", f"-RM {abs(yearly_profit):,.2f}", "Continuous 24/7 Operation", delta_color="inverse")
+    st.markdown("---")
+    pie_col, desc_col = st.columns([1.5, 1])
+    with pie_col:
+        fig_opex = go.Figure(data=[go.Pie(labels=['Base Setup', 'Chemicals (NH4)2SO4', 'Electricity'], values=[base_cost, chemical_cost, electricity_cost], hole=.4, marker_colors=['#94A3B8', '#3B82F6', '#F59E0B'])])
+        fig_opex.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=250)
+        st.plotly_chart(fig_opex, use_container_width=True)
+    with desc_col:
+        st.markdown("#### 📊 OPEX Structure")
+        st.write("Chemical processing dominates the operational expenditure. Optimization of Molarity directly impacts overall project feasibility.")
+
+# Hubungkan butang PDF di sidebar menggunakan data yang dikira
+with export_col2:
+    pdf_bytes = generate_pdf_report(user_molarity, user_time, clamped_display_yield, target_yield, profit_per_block, est_opex, profit_status)
+    st.download_button(label="📄 PDF REPORT", data=pdf_bytes, file_name="ISL_Executive_Report.pdf", mime="application/pdf", use_container_width=True, type="primary")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+# ==========================================
+# 6. GRAPHS, VISUALIZATION & DIGITAL TWIN
+# ==========================================
+with st.expander("📈 Step 3: Visualizing the Data & Infrastructure", expanded=True):
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["⏱️ Time Impact", "🧪 Chemical Impact", "⚖️ Sweet Spot", "🤖 Math Derivation", "🏗️ Digital Twin (SolidWorks)"])
+
+    COLOR_PALETTE = {0.2: '#3498DB', 0.5: '#9B59B6', 1.0: '#E67E22', 1.5: '#2ECC71'}
+    CHART_LAYOUT = dict(template="plotly_white", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", margin=dict(l=20, r=20, t=40, b=20))
+
+    with tab1:
+        fig1 = go.Figure()
+        time_line = np.linspace(0, max_time, 8)
+        for m in [0.2, 0.5, 1.0, 1.5]:
+            fig1.add_trace(go.Scatter(x=time_line, y=[calc_y_mx_c(m, t) for t in time_line], mode='lines+markers', name=f'{m}M', line=dict(width=3, color=COLOR_PALETTE[m])))
+        fig1.add_hline(y=target_yield, line_color="#EF4444", line_width=2, line_dash="dash")
+        fig1.update_layout(**CHART_LAYOUT, xaxis_title="Hours", yaxis_title="Yield (%)", height=400)
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with tab2:
+        fig2 = go.Figure()
+        conc_line = np.linspace(0.1, max_molarity, 8)
+        for t_val, col in zip([24, 72, 144], ['#334155', '#3B82F6', '#F59E0B']):
+            fig2.add_trace(go.Scatter(x=conc_line, y=[calc_y_mx_c(c_val, t_val) for c_val in conc_line], mode='lines+markers', name=f'{t_val} Hours', line=dict(width=3, color=col)))
+        fig2.add_hline(y=target_yield, line_color="#EF4444", line_width=2, line_dash="dash")
+        fig2.update_layout(**CHART_LAYOUT, xaxis_title="Molarity (M)", yaxis_title="Yield (%)", height=400)
+        st.plotly_chart(fig2, use_container_width=True)
+
+    with tab3:
+        fig3 = go.Figure()
+        m_range = np.linspace(0.2, max_molarity, 15)
+        t_needed = [max(0, min((target_yield - C_INTERCEPT - (M_MOLARITY * m)) / M_TIME, max_time)) for m in m_range]
+        fig3.add_trace(go.Scatter(x=t_needed, y=m_range, mode='lines+markers', name='Boundary', line=dict(color='#10B981', width=4)))
+        fig3.add_trace(go.Scatter(x=[t_needed[-1]], y=[m_range[-1]], mode='markers', name='Sweet Spot', marker=dict(color='#EF4444', size=16, symbol='star')))
+        fig3.update_layout(**CHART_LAYOUT, xaxis_title="Hours", yaxis_title="Molarity (M)", height=400)
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with tab4:
+        st.markdown("### 🧮 Model Derivation")
+        st.latex(r"Y = 20.0(X_1) + 0.15(X_2) + 12.0")
+        st.info("💡 Derived systematically from empirical literature.")
+        
+    with tab5:
+        st.markdown("### 🏗️ Open-Pit Mine Infrastructure (SolidWorks Render)")
+        st.write("Integrasi reka bentuk kejuruteraan paip telaga (injection/recovery wells) bagi permodelan lombong terbuka anda.")
+        # Tempat letak gambar render SolidWorks anda
+        try:
+            st.image("cad_mine.png", caption="SolidWorks 3D Render: ISL Well Layout", use_container_width=True)
+        except:
+            st.info("Sila masukkan fail gambar rekaan SolidWorks anda dengan nama `cad_mine.png` ke dalam folder sistem ini untuk dipaparkan secara automatik.")
 
 # ==========================================
-# 6. GRAPHS (CLEAN PREDICTIVE LINES)
-# ==========================================
-st.subheader("📈 Step 3: Visualizing the Data")
-tab1, tab2, tab3, tab4 = st.tabs(["⏱️ 1. Time Impact", "🧪 2. Chemical Impact", "⚖️ 3. Find the Sweet Spot", "🤖 4. How the Math Works"])
-
-COLOR_PALETTE = {0.2: '#3498DB', 0.5: '#9B59B6', 1.0: '#E67E22', 1.5: '#2ECC71'}
-
-with tab1:
-    st.markdown("### How does Pumping Time affect Recovery?")
-    fig1 = go.Figure()
-    time_line = np.linspace(0, max_time, 8)
-    for m in [0.2, 0.5, 1.0, 1.5]:
-        y_pred = [calc_y_mx_c(m, t) for t in time_line]
-        fig1.add_trace(go.Scatter(x=time_line, y=y_pred, mode='lines+markers', name=f'Ammonium Sulphate ({m}M)', line=dict(width=2.5, color=COLOR_PALETTE[m]), marker=dict(size=8)))
-    fig1.add_hline(y=target_yield, line_color="#C0392B", line_width=2, line_dash="dash", annotation_text="Economic Target")
-    fig1.update_layout(template="plotly_white", xaxis_title="<b>Operational Time (Hours)</b>", yaxis_title="<b>Predicted Recovery Yield (%)</b>", yaxis=dict(range=[0, 105]), height=550, legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5))
-    st.plotly_chart(fig1, use_container_width=True)
-
-with tab2:
-    st.markdown("### How does Chemical Strength affect Recovery?")
-    fig2 = go.Figure()
-    conc_line = np.linspace(0.1, max_molarity, 8)
-    for t_val, col in zip([24, 72, 144], ['#34495E', '#2980B9', '#E67E22']):
-        y_pred = [calc_y_mx_c(c_val, t_val) for c_val in conc_line]
-        fig2.add_trace(go.Scatter(x=conc_line, y=y_pred, mode='lines+markers', name=f'Pumped for {t_val} Hours', line=dict(width=2.5, color=col), marker=dict(size=8)))
-    fig2.add_hline(y=target_yield, line_color="#C0392B", line_width=2, line_dash="dash")
-    fig2.update_layout(template="plotly_white", xaxis_title="<b>Ammonium Sulphate Concentration (M)</b>", yaxis_title="<b>Predicted Recovery Yield (%)</b>", yaxis=dict(range=[0, 105]), height=500, legend=dict(orientation="h", yanchor="bottom", y=-0.35, xanchor="center", x=0.5))
-    st.plotly_chart(fig2, use_container_width=True)
-
-with tab3:
-    st.markdown("### Operational Trade-off (Time vs. Chemical)")
-    fig3 = go.Figure()
-    m_range = np.linspace(0.2, max_molarity, 15)
-    t_needed = [max(0, min((target_yield - C_INTERCEPT - (M_MOLARITY * m)) / M_TIME, max_time)) for m in m_range]
-    fig3.add_trace(go.Scatter(x=t_needed, y=m_range, mode='lines+markers', name='Target Boundary', line=dict(color='#27AE60', width=3), marker=dict(size=6)))
-    fig3.add_trace(go.Scatter(x=[t_needed[-1]], y=[m_range[-1]], mode='markers', name='Sweet Spot', marker=dict(color='red', size=15, symbol='star')))
-    fig3.update_layout(template="plotly_white", xaxis_title="<b>Required Pumping Time (Hours)</b>", yaxis_title="<b>Required Ammonium Sulphate Concentration (M)</b>", height=500)
-    st.plotly_chart(fig3, use_container_width=True)
-
-with tab4:
-    st.markdown("### 🧮 Model Derivation: How We Built The Equation")
-    st.write("To ensure high engineering accuracy, our predictive equation was not assumed. It was strictly derived through a systematic data-modeling process before accepting any user inputs.")
-    st.markdown("""
-    #### **Step 1: Empirical Data Extraction**
-    We tabulated raw experimental results focusing exclusively on Ammonium Sulphate extraction dynamics:
-    * **Concentration impact** sourced from *He et al. (2016)*.
-    * **Diffusion time impact** in un-agitated conditions sourced from *Miiro (2023)*.
-    * **Local validation benchmark** sourced from *Fendy & Ismail* for GM48 samples.
-    
-    #### **Step 2: Multiple Linear Regression (MLR) Analysis**
-    The raw data points were subjected to a statistical regression analysis to find the "Line of Best Fit" across a 3-dimensional plane (Yield vs. Concentration vs. Time). 
-    
-    #### **Step 3: Generating the Exact Equation**
-    The regression output generated the exact, validated constants and gradients required for our base equation ($Y = m_1X_1 + m_2X_2 + C$):
-    """)
-    st.latex(r"Y = 20.0(X_1) + 0.15(X_2) + 12.0")
-    st.markdown("""
-    * **$X_1$** = Ammonium Sulphate Concentration (Molarity)
-    * **$X_2$** = Pumping Time (Hours)
-    * **$Y$** = Predicted REE Recovery Yield (%)
-    
-    #### **Step 4: Live Application (User Input)**
-    Now that the **exact equation** has been established and hardcoded into the system, the dashboard securely accepts the user's operational inputs ($X_1$ and $X_2$) and instantly processes them through the equation to predict the Recovery Yield ($Y$).
-    """)
-    st.info("💡 **Engineering Value:** By using a pre-validated equation derived from established literature, the system acts as a highly accurate mathematical bridge between academic research and industrial application.")
-
-# ==========================================
-# 7. FULL ACADEMIC REFERENCES (APA 7TH EDITION)
+# 7. REFERENCES
 # ==========================================
 st.markdown("---")
-with st.expander("📚 Full Academic References & Project Bibliography (APA 7th Edition)"):
+with st.expander("📚 Academic References (APA 7th Edition)"):
     st.markdown("""
-    1. **Fendy, N. A., & Ismail, R. (n.d.).** Leaching of non-radioactive rare earth elements (NR-REE) from ion adsorption clay (IAC) using monovalent salt solution. *Department of Geoscience, Universiti Malaysia Kelantan*.
-    2. **Hamka, A. A. M., Saleki, M., Nabavi, Z., & Dehghani, H. (2024).** Impacts of ammonium sulfate leaching on ion adsorption, rare earths, and soil mechanical properties. *Rudarsko-geološko-naftni zbornik*, 39(1), 27-40. https://doi.org/10.17794/rgn.2024.1.3
-    3. **He, H., Shan, H., Mo, D., Liu, Y., Peng, S., Cheng, Y., Chen, M., & Yan, Z. (2023).** Simulation study on the environmental impact of rare earth ore development on groundwater in hilly areas: A case study in Nuodong, China. *Water*, 15(2), 263. https://doi.org/10.3390/w15020263
-    4. **He, Z., Zhang, Z., Yu, J., Xu, Z., & Chi, R. (2016).** Process optimization of rare earth elements leaching from ion-adsorption ores with ammonium sulfate. *Hydrometallurgy*, 164, 1-7.
-    5. **Miiro, E. (2023).** *Hydrometallurgical processing of rare earth elements from clays* (Master's thesis). University of Cape Town.
-    6. **Moldoveanu, G. A., & Papangelakis, V. G. (2013).** Recovery of rare earth elements adsorbed on clay minerals: II. Leaching with ammonium sulphate. *Hydrometallurgy*, 131, 158-166.
-    7. **Muhammad, N. N. N., Muna, N. A., Yunus, M. Y. M., Kassim, K., Jamion, N. A., Hanafiah, M. A. K. M., Ghazali, N. F., & Kong, Y. S. (2025).** Advances in the development of leaching agents for assisting phytoremediation of rare earth elements: A review. *Malaysian Journal of Chemistry*, 27(5), 27-50.
-    8. **Sobri, N. A. M., & Harun, N. (2025).** Mathematical modelling of rare earth elements recovery by ion exchange leaching from ion adsorption clays. *Journal of Chemical Engineering and Industrial Biotechnology*, 11(1), 41-58. https://doi.org/10.15282/jceib.v11i1.12401
-    9. **Wu, X., Feng, J., Zhou, F., Liu, C., & Chi, R. (2024).** Optimisation of a rare earth and aluminum leaching process from weathered crust elution-deposited rare earth ore with surfactant CTAB. *Minerals*, 14(3), 321. https://doi.org/10.3390/min14030321
+    1. **Fendy, N. A., & Ismail, R. (n.d.).** Leaching of NR-REE from IAC using monovalent salt. *Universiti Malaysia Kelantan*.
+    2. **Hamka, A. A. M., et al. (2024).** Impacts of ammonium sulfate leaching. *Rudarsko-geološko-naftni zbornik*, 39(1), 27-40.
+    3. **He, H., et al. (2023).** Environmental impact of REE development on groundwater. *Water*, 15(2), 263.
+    4. **He, Z., et al. (2016).** Process optimization of REE leaching. *Hydrometallurgy*, 164, 1-7.
+    5. **Miiro, E. (2023).** *Hydrometallurgical processing of REE from clays*. UCT.
+    6. **Moldoveanu, G. A., & Papangelakis, V. G. (2013).** Leaching with ammonium sulphate. *Hydrometallurgy*, 131, 158-166.
     """)
