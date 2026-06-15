@@ -426,9 +426,10 @@ st.markdown("<br>", unsafe_allow_html=True)
 # 6. VISUALIZATION EXPANDER (GRAPHS & SENSITIVITY)
 # ==============================================================================
 with st.expander("📈 Predictive Analytics & Financial Visualization", expanded=True):
-    tab_a, tab_b, tab_c, tab_d = st.tabs([
+    tab_a, tab_b, tab_c, tab_d, tab_e = st.tabs([
         "📊 OPEX Structure", 
         "⏱️ Kinetics Impact", 
+        "🧪 Chemical Impact", 
         "⚖️ Profit Sensitivity", 
         "🧮 Model Math"
     ])
@@ -456,6 +457,16 @@ with st.expander("📈 Predictive Analytics & Financial Visualization", expanded
         st.plotly_chart(fig1, use_container_width=True)
 
     with tab_c:
+        st.markdown("### Chemical Efficiency: Concentration Gradient")
+        fig2 = go.Figure()
+        conc_line = np.linspace(0.1, max_molarity, 20)
+        for t_val, col in zip([24, 72, 144], ['#334155', '#3B82F6', '#F59E0B']):
+            fig2.add_trace(go.Scatter(x=conc_line, y=[calc_y_mx_c(c, t_val) for c in conc_line], name=f'{t_val} Hours', line=dict(width=3, color=col)))
+        fig2.add_hline(y=target_yield, line_dash="dash", line_color="red")
+        fig2.update_layout(**CHART_LAYOUT, xaxis_title="Molarity (M)", yaxis_title="Yield (%)", height=400)
+        st.plotly_chart(fig2, use_container_width=True)
+
+    with tab_d:
         st.markdown("### Sensitivity Analysis: Molarity vs Net Profit")
         m_vals = np.linspace(0.1, 2.0, 20)
         profit_vals = [((100 * ree_content / 1000) * (min(calc_y_mx_c(m, 144), 100)/100) * market_price) - (500 + (m * 1000) + (144 * 12)) for m in m_vals]
@@ -466,7 +477,7 @@ with st.expander("📈 Predictive Analytics & Financial Visualization", expanded
         fig3.update_layout(**CHART_LAYOUT, xaxis_title="Molarity (M) @ 144 Hours", yaxis_title="Net Profit (RM)", height=400)
         st.plotly_chart(fig3, use_container_width=True)
 
-    with tab_d:
+    with tab_e:
         st.markdown("### 🧮 Statistical Model Derivation")
         st.latex(r"Y = 12.0 + 20.0(X_1) + 0.15(X_2)")
         st.markdown("""
